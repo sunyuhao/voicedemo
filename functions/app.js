@@ -15,9 +15,15 @@
 const querystring = require('querystring');
 const http = require('http');
 const app = require('actions-on-google').dialogflow({debug: true});
-const {welcomeResponse, fallBackResponse, speach} = require('./responses');
+const {
+  welcomeResponse,
+  fallBackResponse,
+  speach,
+} = require('./responses');
 const {ssml, validReservation} = require('./utils');
-
+const {
+  Suggestions,
+ } = require('actions-on-google');
 /**
  *
  * Sanitize template literal inputs by escaping characters into XML entities
@@ -56,24 +62,38 @@ const postCode = () => {
   postReq.end();
 };
 
-
-// const fallback = (conv) => {
-//   conv.ask(completeResponses.didNotUnderstand);
-//   conv.ask(completeResponses.examplesList);
-// };
-
-// const chooseExample = (conv, params) => {
-//   const element = params.element;
-//   if (!element) return fallback(conv);
-//   conv.ask(completeResponses.leadToExample(element));
-//   conv.ask(examples[element]);
-// };
+app.intent('ask_for_permissions_detailed', (conv) => {
+  // Choose one or more supported permissions to request:
+  // NAME, DEVICE_PRECISE_LOCATION, DEVICE_COARSE_LOCATION
+  const options = {
+    context: 'To address you by name and know your location',
+    // Ask for more than one permission. User can authorize all or none.
+    permissions: ['NAME', 'DEVICE_PRECISE_LOCATION'],
+  };
+  conv.ask(new Permission(options));
+});
 
 const welcome = (conv) => {
   postCode();
-  conv.ask(welcomeResponse.welcome);
-  conv.ask(speach['greatings']);
+  conv.ask(welcomeResponse.welcome,
+    speach['greatings']
+  );
+  if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+    return;
+  }
+
+  conv.ask( new Suggestions([
+    'Oui',
+    'Non',
+  ]) );
 };
+
+const askReservationNumber = (conv) => {
+  conv.ask(
+    speach['askNumber']
+  );
+};
+
 
 const fallbackNumber = (conv) => {
   conv.ask(fallBackResponse.didNotUnderstand);
@@ -86,22 +106,93 @@ const inputReservation = (conv, params) => {
   let speachNumber = {
     'number': ssml`
     <speak>
-    <say-as interpret-as="characters">` + reservationNumber + `</say-as>
-    C'est ça?
+      <seq>
+        <media>
+          <speak>
+            OK! Votre numéro de réservation c\'est: 
+          </speak>
+        </media>
+        <media>
+          <speak>
+            <say-as interpret-as="characters">` + reservationNumber + `</say-as>
+          </speak>
+        </media>
+        <media>
+          <speak>
+            C'est ça?
+          </speak>
+        </media>
+      </seq>
     </speak>
     `,
   };
   if (validReservation(reservationNumber)) {
-  conv.ask('OK! Votre numéro de réservation c\'est: ');
-  conv.ask(speachNumber['number'] );
+    conv.ask(speachNumber['number'] );
   } else {
     conv.ask('Votre numéro de réservation n\'est pas valide ');
   }
+
+  if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+    return;
+  }
+
+  conv.ask( new Suggestions([
+    'Oui',
+    'Non',
+  ]) );
 };
 
+const chooseAction = (conv) => {
+  conv.ask(
+    speach['chooseAction']
+  );
+if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+    return;
+  }
 
-app.intent('Default Welcome Intent', welcome);
+  conv.ask( new Suggestions([
+    'Réserver des activités',
+    'Ajouter des options',
+    'Recevoir des informations',
+    'Faire la liste des choses',
+  ]) );
+};
+
+const chooseActivies = (conv) => {
+  conv.ask(
+    speach['chooseActivites']
+  );
+  if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+      return;
+    }
+
+    conv.ask( new Suggestions([
+      'Mini golf',
+      'Paint ball',
+      'Bowling',
+      'Tennis',
+    ]) );
+  };
+
+  const tennisActivies = (conv) => {
+    conv.ask(
+      speach['tennisActivites']
+    );
+    if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+        return;
+      }
+
+      conv.ask( new Suggestions([
+        '15h',
+        '17h',
+        '19h',
+      ]) );
+    };
+
+app.intent('Welcome Intent', welcome);
+app.intent('Yes Ask Number', askReservationNumber);
 app.intent('input-reservation', inputReservation);
-
-
+app.intent('input-reservation-yes', chooseAction);
+app.intent('Reserver Activites', chooseActivies);
+app.intent('Tennis Activites', tennisActivies);
 module.exports = app;
